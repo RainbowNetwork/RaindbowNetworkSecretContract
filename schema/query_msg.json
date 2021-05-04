@@ -5,11 +5,41 @@
     {
       "type": "object",
       "required": [
-        "get_count"
+        "admin"
       ],
       "properties": {
-        "get_count": {
+        "admin": {
           "type": "object"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "coins"
+      ],
+      "properties": {
+        "coins": {
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "coin"
+      ],
+      "properties": {
+        "coin": {
+          "type": "object",
+          "required": [
+            "coin"
+          ],
+          "properties": {
+            "coin": {
+              "type": "string"
+            }
+          }
         }
       }
     }
