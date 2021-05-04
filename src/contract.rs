@@ -2,7 +2,7 @@ use cosmwasm_std::{to_binary, Api, Binary, Env, Extern, HandleResponse, InitResp
                    StdError, StdResult, Storage, HumanAddr, Uint128};
 use ethereum_types::Address;
 use crate::msg::{HandleMsg, InitMsg, QueryMsg, HandleAnswer, QueryAnswer};
-use crate::state::{load, may_load, save, State, CoinInfo, CONFIG_KEY};
+use crate::state::{load, save, State, CoinInfo, CONFIG_KEY};
 use std::{str::FromStr, collections::HashMap};
 use secret_toolkit::snip20::{burn_from_msg, mint_msg};
 
@@ -33,9 +33,9 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     match msg {
         HandleMsg::ChangeAdmin { address } => try_change_admin(deps, env, address),
         HandleMsg::RemoveCoin { coin } => try_remove_coin(deps, env, coin),
-        HandleMsg::AddCoin { coin, secret_addr, secret_hash, ethereum_addr } => try_add_coin(deps, env, coin, secret_addr, secret_hash, ethereum_addr),
-        HandleMsg::TransferToEthAddr { recipient, coin, amount } => try_transfer_to_eth(deps, env, recipient, coin, amount),
-        HandleMsg::ReceiveFromEthAddr { recipient, coin, amount } => try_receive_from_eth(deps, env, recipient, coin, amount),
+        HandleMsg::AddCoin { coin, secret_addr, secret_hash, matic_addr: ethereum_addr } => try_add_coin(deps, env, coin, secret_addr, secret_hash, ethereum_addr),
+        HandleMsg::TransferToMaticAddr { recipient, coin, amount } => try_transfer_to_eth(deps, env, recipient, coin, amount),
+        HandleMsg::ReceiveFromMaticAddr { recipient, coin, amount } => try_receive_from_eth(deps, env, recipient, coin, amount),
     }
 }
 
@@ -45,6 +45,8 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
 ) -> StdResult<Binary> {
     match msg {
         QueryMsg::Admin { } => query_admin(deps),
+        QueryMsg::Coins{ } => query_coins(deps),
+        QueryMsg::Coin{ coin } => query_coin(deps, coin),
     }
 }
 
@@ -95,6 +97,7 @@ fn try_remove_coin<S: Storage, A: Api, Q: Querier>(
     if config.coins.contains_key(&coin) {
         config.coins.remove(&coin);
         status = String::from("Coin removed");
+        save(&mut deps.storage, CONFIG_KEY, &config)?;
     } else {
         status = String::from("Coin does not exist");
     }
@@ -134,7 +137,7 @@ fn try_add_coin<S: Storage, A: Api, Q: Querier>(
         // Check that secret address is valid
         deps.api.canonical_address(&secret_addr)?;
 
-        config.coins.insert(coin, CoinInfo { secret_addr, secret_hash, ethereum_addr });
+        config.coins.insert(coin, CoinInfo { secret_addr, secret_hash, matic_addr: ethereum_addr });
         save(&mut deps.storage, CONFIG_KEY, &config)?;
 
         status = String::from("Coin added");
@@ -155,44 +158,43 @@ fn try_add_coin<S: Storage, A: Api, Q: Querier>(
 fn try_transfer_to_eth<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
-    _recipient: String,
+    recipient: String,
     coin: String,
     amount: Uint128,
 ) -> StdResult<HandleResponse> {
-
-    let status: String;
 
     // Get the config
     let config: State = load(&deps.storage, CONFIG_KEY)?;
 
     let mut response_messages = vec![];
 
+    // Check if coin exists
+    let coin_info ;
     match config.coins.get(&coin) {
-        Some(coin_info) => {
-
-            let cosmos_msg = burn_from_msg(
-                env.message.sender,
-                amount,
-                None,
-                256,
-                coin_info.secret_hash.clone(),
-                coin_info.secret_addr.clone())?;
-
-            response_messages.push(cosmos_msg);
-
-            status = String::from("Transfered")
+        Some(ret_coin) => {
+            coin_info = ret_coin;
         },
-        None => {status = String::from("Coin doesnt exists")},
+        _ => { return Err(StdError::generic_err("Coin does not exist", )); },
     }
 
-    // TODO: something has to be done with the recipient addr
+    let cosmos_msg = burn_from_msg(
+        env.message.sender,
+        amount,
+        None,
+        256,
+        coin_info.secret_hash.clone(),
+        coin_info.secret_addr.clone())?;
+
+    response_messages.push(cosmos_msg);
 
     // Return a HandleResponse
     Ok(HandleResponse {
         messages: response_messages,
         log: vec![],
-        data: Some(to_binary(&HandleAnswer::GenericResponse {
-            response: status,
+        data: Some(to_binary(&HandleAnswer::TransferToMaticResponse {
+            recipient,
+            coin,
+            amount,
         })?),
     })
 }
@@ -215,23 +217,26 @@ fn try_receive_from_eth<S: Storage, A: Api, Q: Querier>(
 
     let mut response_messages = vec![];
 
+    // Check if coin exists
+    let coin_info ;
     match config.coins.get(&coin) {
-        Some(coin_info) => {
-
-            let cosmos_msg = mint_msg(
-                recipient,
-                amount,
-                None,
-                256,
-                coin_info.secret_hash.clone(),
-                coin_info.secret_addr.clone())?;
-
-            response_messages.push(cosmos_msg);
-
-            status = String::from("Transfered")
+        Some(ret_coin) => {
+            coin_info = ret_coin;
         },
-        None => {status = String::from("Coin doesnt exists")},
+        _ => { return Err(StdError::generic_err("Coin does not exist", )); },
     }
+
+    let cosmos_msg = mint_msg(
+        recipient,
+        amount,
+        None,
+        256,
+        coin_info.secret_hash.clone(),
+        coin_info.secret_addr.clone())?;
+
+    response_messages.push(cosmos_msg);
+
+    status = String::from("Transfered");
 
     // Return a HandleResponse
     Ok(HandleResponse {
@@ -278,4 +283,39 @@ fn query_admin<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdRes
     // retrieve the config state from storage
     let config: State = load(&deps.storage, CONFIG_KEY)?;
     to_binary(&QueryAnswer::Admin{ admin: config.admin })
+}
+
+fn query_coins<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<Binary> {
+    // retrieve the config state from storage
+    let config: State = load(&deps.storage, CONFIG_KEY)?;
+
+
+    let mut coins_arr: Vec<String> = vec![];
+
+    for (key, _value) in config.coins.iter() {
+        coins_arr.push(key.clone());
+    }
+
+    to_binary(&QueryAnswer::Coins{ coins: coins_arr })
+}
+
+fn query_coin<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, coin: String) -> StdResult<Binary> {
+    // retrieve the config state from storage
+    let config: State = load(&deps.storage, CONFIG_KEY)?;
+
+    let coin_info;
+
+    match config.coins.get(&coin) {
+        Some(ret_coin) => {
+            coin_info = ret_coin;
+        },
+        _ => { return Err(StdError::generic_err("Coin does not exist", )); },
+    }
+
+    to_binary(&QueryAnswer::Coin{
+        coin,
+        secret_addr: coin_info.secret_addr.clone(),
+        secret_hash: coin_info.secret_hash.clone(),
+        matic_addr: coin_info.matic_addr.clone(),
+    })
 }
