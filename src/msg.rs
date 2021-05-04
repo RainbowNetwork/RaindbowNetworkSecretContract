@@ -24,18 +24,18 @@ pub enum HandleMsg {
         coin: String,
         secret_addr: HumanAddr,
         secret_hash: String,
-        ethereum_addr: String,
+        matic_addr: String,
     },
 
     // Bridge functions
     // Users use this to transfer to eth
-    TransferToEthAddr {
+    TransferToMaticAddr {
         recipient: String,
         coin: String,
         amount: Uint128,
     },
     // Admin use this to give users their transfered assets
-    ReceiveFromEthAddr {
+    ReceiveFromMaticAddr {
         recipient: HumanAddr,
         coin: String,
         amount: Uint128,
@@ -49,6 +49,11 @@ pub enum QueryMsg {
     // add QueryMsg types here
 
     Admin {},
+    Coins{},
+    Coin{
+        coin: String,
+    },
+
 }
 
 /// Responses from handle function
@@ -67,6 +72,12 @@ pub enum HandleAnswer {
         response: String,
     },
 
+    TransferToMaticResponse {
+        recipient: String,
+        coin: String,
+        amount: Uint128,
+    },
+
 }
 
 /// Responses from query function
@@ -77,5 +88,16 @@ pub enum QueryAnswer {
 
     Admin {
         admin: HumanAddr,
+    },
+
+    Coins {
+        coins: Vec<String>,
+    },
+
+    Coin {
+        coin: String,
+        secret_addr: HumanAddr,
+        secret_hash: String,
+        matic_addr: String,
     },
 }

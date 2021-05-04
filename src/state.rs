@@ -18,7 +18,7 @@ pub struct State {
 pub struct CoinInfo {
     pub secret_addr: HumanAddr,
     pub secret_hash: String,
-    pub ethereum_addr: String,
+    pub matic_addr: String,
 }
 
 pub fn save<T: Serialize, S: Storage>(storage: &mut S, key: &[u8], value: &T) -> StdResult<()> {
