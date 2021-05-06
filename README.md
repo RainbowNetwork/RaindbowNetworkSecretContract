@@ -24,9 +24,19 @@ Get more information on one of the supported coins
 secretcli query compute query <Contract Address> '{"coin": {"coin": <coin>}}'
 ```
 
+Get swap history, maximum return size is 100 items
+```bash
+secretcli query compute query <Contract Address> '{"get_txs": {"start": <start>}}'
+```
+
 ### Interactions
 
 Move funds from <user secret address> over to <user polygon address>, remember that you must first give the contract an allowance.
+
+How to give allowance
+```bash
+secretcli tx compute execute <Coin Contract Address> '{"increase_allowance": {"spender": "<Bridge Contract Address>", "amount": "<amount>"}'
+```
 
 ```bash
 secretcli tx compute execute <Contract Address> '{"transfer_to_matic_addr": {"recipient": "<user polygon address>", "coin": "<coin>", "amount": "<amount>"}'
