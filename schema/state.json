@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "State",
+  "type": "object",
+  "required": [
+    "admin",
+    "coins"
+  ],
+  "properties": {
+    "admin": {
+      "$ref": "#/definitions/HumanAddr"
+    },
+    "coins": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/CoinInfo"
+      }
+    }
+  },
+  "definitions": {
+    "CoinInfo": {
+      "type": "object",
+      "required": [
+        "matic_addr",
+        "secret_addr",
+        "secret_hash"
+      ],
+      "properties": {
+        "matic_addr": {
+          "type": "string"
+        },
+        "secret_addr": {
+          "$ref": "#/definitions/HumanAddr"
+        },
+        "secret_hash": {
+          "type": "string"
+        }
+      }
+    },
+    "HumanAddr": {
+      "type": "string"
+    }
+  }
+}
