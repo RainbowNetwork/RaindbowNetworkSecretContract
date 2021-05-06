@@ -1,6 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use cosmwasm_std::{HumanAddr, Uint128};
+use crate::state::TransactionInfo;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InitMsg {
@@ -49,9 +50,12 @@ pub enum QueryMsg {
     // add QueryMsg types here
 
     Admin {},
-    Coins{},
-    Coin{
+    Coins {},
+    Coin  {
         coin: String,
+    },
+    GetTxs {
+        start: u64,
     },
 
 }
@@ -100,4 +104,8 @@ pub enum QueryAnswer {
         secret_hash: String,
         matic_addr: String,
     },
+
+    Txs {
+        txs: Vec<TransactionInfo>,
+    }
 }

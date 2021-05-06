@@ -2,7 +2,7 @@ use cosmwasm_std::{to_binary, Api, Binary, Env, Extern, HandleResponse, InitResp
                    StdError, StdResult, Storage, HumanAddr, Uint128};
 use ethereum_types::Address;
 use crate::msg::{HandleMsg, InitMsg, QueryMsg, HandleAnswer, QueryAnswer};
-use crate::state::{load, save, State, CoinInfo, CONFIG_KEY};
+use crate::state::{load, save, State, CoinInfo, TransactionInfo, CONFIG_KEY};
 use std::{str::FromStr, collections::HashMap};
 use secret_toolkit::snip20::{burn_from_msg, mint_msg};
 
@@ -16,9 +16,12 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
 
     let coins: HashMap<String, CoinInfo> = HashMap::new();
 
+    let txs: Vec<TransactionInfo> = Vec::new();
+
     let config = State {
         admin,
         coins,
+        txs,
     };
 
     save(&mut deps.storage, CONFIG_KEY, &config)?;
@@ -34,8 +37,8 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
         HandleMsg::ChangeAdmin { address } => try_change_admin(deps, env, address),
         HandleMsg::RemoveCoin { coin } => try_remove_coin(deps, env, coin),
         HandleMsg::AddCoin { coin, secret_addr, secret_hash, matic_addr: ethereum_addr } => try_add_coin(deps, env, coin, secret_addr, secret_hash, ethereum_addr),
-        HandleMsg::TransferToMaticAddr { recipient, coin, amount } => try_transfer_to_eth(deps, env, recipient, coin, amount),
-        HandleMsg::ReceiveFromMaticAddr { recipient, coin, amount } => try_receive_from_eth(deps, env, recipient, coin, amount),
+        HandleMsg::TransferToMaticAddr { recipient, coin, amount } => try_transfer_to_matic(deps, env, recipient, coin, amount),
+        HandleMsg::ReceiveFromMaticAddr { recipient, coin, amount } => try_receive_from_matic(deps, env, recipient, coin, amount),
     }
 }
 
@@ -47,6 +50,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
         QueryMsg::Admin { } => query_admin(deps),
         QueryMsg::Coins{ } => query_coins(deps),
         QueryMsg::Coin{ coin } => query_coin(deps, coin),
+        QueryMsg::GetTxs{ start } => query_txs(deps, start),
     }
 }
 
@@ -155,7 +159,7 @@ fn try_add_coin<S: Storage, A: Api, Q: Querier>(
     })
 }
 
-fn try_transfer_to_eth<S: Storage, A: Api, Q: Querier>(
+fn try_transfer_to_matic<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
     recipient: String,
@@ -164,7 +168,7 @@ fn try_transfer_to_eth<S: Storage, A: Api, Q: Querier>(
 ) -> StdResult<HandleResponse> {
 
     // Get the config
-    let config: State = load(&deps.storage, CONFIG_KEY)?;
+    let mut config: State = load(&deps.storage, CONFIG_KEY)?;
 
     let mut response_messages = vec![];
 
@@ -187,6 +191,14 @@ fn try_transfer_to_eth<S: Storage, A: Api, Q: Querier>(
 
     response_messages.push(cosmos_msg);
 
+    config.txs.push(TransactionInfo{
+        recipient: String::from(&recipient),
+        coin: String::from(&coin),
+        amount,
+    });
+
+    save(&mut deps.storage, CONFIG_KEY, &config)?;
+
     // Return a HandleResponse
     Ok(HandleResponse {
         messages: response_messages,
@@ -199,7 +211,7 @@ fn try_transfer_to_eth<S: Storage, A: Api, Q: Querier>(
     })
 }
 
-fn try_receive_from_eth<S: Storage, A: Api, Q: Querier>(
+fn try_receive_from_matic<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
     recipient: HumanAddr,
@@ -317,5 +329,28 @@ fn query_coin<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, coin: Stri
         secret_addr: coin_info.secret_addr.clone(),
         secret_hash: coin_info.secret_hash.clone(),
         matic_addr: coin_info.matic_addr.clone(),
+    })
+}
+
+fn query_txs<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, start: u64) -> StdResult<Binary> {
+    // retrieve the config state from storage
+    let config: State = load(&deps.storage, CONFIG_KEY)?;
+
+    let size = config.txs.len();
+
+    if start > size as u64 {
+        return Err(StdError::generic_err("Start is greater than total transactions", ));
+    }
+
+    let end = if start+100 > size as u64 {size as u64} else {start+100};
+
+    let mut return_txs: Vec<TransactionInfo> = vec![];
+
+    for i in start..end {
+        return_txs.push(config.txs[i as usize].clone());
+    }
+
+    to_binary(&QueryAnswer::Txs{
+        txs: return_txs,
     })
 }

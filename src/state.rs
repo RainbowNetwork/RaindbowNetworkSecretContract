@@ -1,6 +1,6 @@
 use std::{any::type_name, collections::HashMap};
 use serde::{Deserialize, Serialize};
-use cosmwasm_std::{HumanAddr, Storage, StdResult, ReadonlyStorage, StdError};
+use cosmwasm_std::{HumanAddr, Storage, StdResult, ReadonlyStorage, StdError, Uint128};
 use serde::de::DeserializeOwned;
 use secret_toolkit::serialization::{Bincode2, Serde};
 use schemars::JsonSchema;
@@ -11,6 +11,15 @@ pub static CONFIG_KEY: &[u8] = b"config";
 pub struct State {
     pub admin: HumanAddr,
     pub coins: HashMap<String, CoinInfo>,
+    pub txs: Vec<TransactionInfo>,
+}
+
+// Store each currency with an address for ethereum and secret
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct TransactionInfo {
+    pub recipient: String,
+    pub coin: String,
+    pub amount: Uint128,
 }
 
 // Store each currency with an address for ethereum and secret
